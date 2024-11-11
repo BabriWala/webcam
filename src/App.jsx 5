@@ -1,3 +1,24 @@
+The error Cannot read properties of null (reading 'videoWidth') occurs because videoRef.current is likely null when you try to access videoRef.current.videoWidth. This is likely happening because the videoRef is either not yet attached to the DOM or the video element hasn't started loading or playing when you try to read its dimensions.
+
+Causes of this error:
+
+1. Video element not yet mounted: If you're trying to access the videoWidth immediately after setting srcObject, the video element might not have loaded its metadata yet.
+
+
+2. Race condition: The video element's metadata (like videoWidth and videoHeight) might not be available right after srcObject is set.
+
+
+
+Solution:
+
+To avoid this issue, you need to ensure that the video has fully loaded and its metadata (such as videoWidth and videoHeight) is available before you attempt to access it.
+
+You can do this by listening for the loadedmetadata event, which is triggered once the metadata (such as video dimensions) is available.
+
+Updated Code:
+
+Here’s how you can modify your code to handle this error:
+
 import { useState, useRef, useEffect } from "react";
 
 function App() {
@@ -22,16 +43,18 @@ function App() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.style.display = "none"; // Hide the video for UI
-      }
 
-      // Initialize the canvas dimensions
-      if (processedDisplayRef.current) {
-        processedDisplayRef.current.width = videoRef.current.videoWidth;
-        processedDisplayRef.current.height = videoRef.current.videoHeight;
-      }
+        // Wait for the video metadata to be loaded
+        videoRef.current.onloadedmetadata = () => {
+          if (processedDisplayRef.current) {
+            processedDisplayRef.current.width = videoRef.current.videoWidth;
+            processedDisplayRef.current.height = videoRef.current.videoHeight;
+          }
 
-      // Start processing frames
-      setIsProcessing(true);
+          // Start processing frames after metadata is loaded
+          setIsProcessing(true);
+        };
+      }
     } catch (err) {
       console.error("Error accessing camera:", err);
     }
@@ -162,3 +185,42 @@ function App() {
 }
 
 export default App;
+
+Key Changes:
+
+1. Wait for loadedmetadata event:
+
+After setting videoRef.current.srcObject = stream, we wait for the loadedmetadata event to fire, which indicates that the video element has loaded its metadata (including videoWidth and videoHeight).
+
+Once onloadedmetadata is triggered, we set the canvas size and start the frame processing.
+
+
+videoRef.current.onloadedmetadata = () => {
+  if (processedDisplayRef.current) {
+    processedDisplayRef.current.width = videoRef.current.videoWidth;
+    processedDisplayRef.current.height = videoRef.current.videoHeight;
+  }
+
+  // Start processing frames after metadata is loaded
+  setIsProcessing(true);
+};
+
+
+2. Accessing videoWidth safely:
+
+By waiting for the loadedmetadata event, we ensure that videoRef.current.videoWidth and videoRef.current.videoHeight are available before we try to access them.
+
+
+
+
+Explanation:
+
+onloadedmetadata: This event is fired once the metadata for a video (like its dimensions) is fully loaded. We listen for this event before accessing videoWidth and videoHeight to avoid the error that occurs when trying to read these properties too early.
+
+Video Stream Handling: The stream is only assigned to the videoRef after the metadata has been loaded, which ensures that when you attempt to get the videoWidth, it is a valid value.
+
+
+Conclusion:
+
+By listening for the loadedmetadata event, you ensure that the video element's metadata (such as width and height) is fully available before trying to access these properties. This avoids the null reference error when trying to read videoWidth.
+
