@@ -17,12 +17,18 @@ function App() {
       // Access the camera stream
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       setCurrentStream(stream);
-      videoRef.current.srcObject = stream;
 
-      // Hide the video feed and prepare the canvas for processed images
-      videoRef.current.style.display = "none";
-      processedDisplayRef.current.width = videoRef.current.videoWidth;
-      processedDisplayRef.current.height = videoRef.current.videoHeight;
+      // Ensure videoRef is not null before setting the stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.style.display = "none"; // Hide the video for UI
+      }
+
+      // Initialize the canvas dimensions
+      if (processedDisplayRef.current) {
+        processedDisplayRef.current.width = videoRef.current.videoWidth;
+        processedDisplayRef.current.height = videoRef.current.videoHeight;
+      }
 
       // Start processing frames
       setIsProcessing(true);
@@ -36,11 +42,15 @@ function App() {
     if (currentStream) {
       setIsProcessing(false);
       currentStream.getTracks().forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
 
       // Clear the canvas when stopping
-      const ctx = processedDisplayRef.current.getContext("2d");
-      ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
+      const ctx = processedDisplayRef.current?.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
+      }
     }
   };
 
@@ -74,9 +84,11 @@ function App() {
       const data = await response.json();
       const processedImage = new Image();
       processedImage.onload = () => {
-        const ctx = processedDisplayRef.current.getContext("2d");
-        ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
-        ctx.drawImage(processedImage, 0, 0);
+        const ctx = processedDisplayRef.current?.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
+          ctx.drawImage(processedImage, 0, 0);
+        }
 
         // Continue processing if still active
         if (isProcessing) {
@@ -94,17 +106,22 @@ function App() {
     if (isProcessing) {
       processFrames(); // Start processing when isProcessing becomes true
     }
-    // Cleanup on unmount or when processing stops
+
+    // Cleanup when processing stops
     return () => {
       setIsProcessing(false);
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop());
       }
-      videoRef.current.srcObject = null;
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
 
       // Clear canvas
-      const ctx = processedDisplayRef.current.getContext("2d");
-      ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
+      const ctx = processedDisplayRef.current?.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
+      }
     };
   }, [isProcessing]); // Re-run the effect when isProcessing changes
 
@@ -145,4 +162,3 @@ function App() {
 }
 
 export default App;
-    
