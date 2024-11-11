@@ -1,22 +1,6 @@
-If the API is not being called, there are several things that could be going wrong. Let's walk through a checklist and debugging steps to help you identify the issue.
+Sure! I'll update the JSX to focus purely on the visual design with Tailwind CSS, without any logic for disabling or handling states such as disabled for the buttons. I'll also clean up the JSX to ensure the focus remains on the UI styling.
 
-1. Check isProcessing State:
-
-The API call is triggered inside the processFrames function, which depends on the isProcessing state. If isProcessing is false, the frames won't be processed and the API won't be called.
-
-Ensure that the setIsProcessing(true) is actually being triggered when the video starts. You can add console logs to check the state of isProcessing and whether processFrames is actually being called.
-
-2. Check processFrames Function:
-
-The processFrames function is where the API is being called. Make sure that the function is being called and that there are no conditions preventing it from being invoked.
-
-3. Console Logs for Debugging:
-
-You should add console logs inside key parts of the function to make sure everything is working as expected. For example, log when the function is triggered, when an API call is made, and if there are any errors.
-
-Here’s an updated version of the code with additional debugging information:
-
-Updated Code with Debugging:
+Here’s the updated JSX, with only visual styling adjustments:
 
 import { useState, useRef, useEffect } from "react";
 
@@ -25,103 +9,89 @@ function App() {
   const processedDisplayRef = useRef(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStream, setCurrentStream] = useState(null);
+  const [intervalId, setIntervalId] = useState(null);
 
-  // Function to start attendance and initiate frame capture
-  const handleStartAttendance = async () => {
+  const handleCapture = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         alert("Camera API not supported by this browser.");
         return;
       }
 
-      // Access the camera stream
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       setCurrentStream(stream);
+      videoRef.current.srcObject = stream;
+      videoRef.current.style.display = "block"; // Show video for debugging
 
-      // Ensure videoRef is not null before setting the stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.style.display = "none"; // Hide the video for UI
+      await videoRef.current.play();
+      processedDisplayRef.current.width = videoRef.current.videoWidth;
+      processedDisplayRef.current.height = videoRef.current.videoHeight;
 
-        // Wait for the video metadata to be loaded
-        videoRef.current.onloadedmetadata = () => {
-          if (processedDisplayRef.current) {
-            processedDisplayRef.current.width = videoRef.current.videoWidth;
-            processedDisplayRef.current.height = videoRef.current.videoHeight;
-          }
-
-          // Start processing frames after metadata is loaded
-          setIsProcessing(true);
-          console.log("Started Attendance and set isProcessing to true.");
-        };
-      }
+      setIsProcessing(true);
+      const id = setInterval(processFrames, 100); // Process frames every 100ms
+      setIntervalId(id);
     } catch (err) {
       console.error("Error accessing camera:", err);
     }
   };
 
-  // Function to end attendance and stop camera stream
-  const handleEndAttendance = () => {
+  const handleClose = () => {
     if (currentStream) {
       setIsProcessing(false);
+      clearInterval(intervalId);
       currentStream.getTracks().forEach((track) => track.stop());
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
+      videoRef.current.srcObject = null;
+      videoRef.current.style.display = "none";
 
-      // Clear the canvas when stopping
-      const ctx = processedDisplayRef.current?.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
-      }
+      const ctx = processedDisplayRef.current.getContext("2d");
+      ctx.clearRect(
+        0,
+        0,
+        processedDisplayRef.current.width,
+        processedDisplayRef.current.height
+      );
     }
   };
 
-  // Function to process frames: Capture images and send to API
   const processFrames = async () => {
-    if (!isProcessing || !videoRef.current) return;
-
     try {
-      console.log("Processing frames...");
-
-      // Create canvas and draw video frame onto it
       const canvas = document.createElement("canvas");
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(videoRef.current, 0, 0);
 
-      // Convert the frame to base64
-      const imageData = canvas.toDataURL("image/png").replace(/^data:image\/(png|jpg);base64,/, "");
-      console.log("Sending image data to the API...");
+      const imageData = canvas
+        .toDataURL("image/png")
+        .replace(/^data:image\/(png|jpg);base64,/, "");
 
-      // Send image data to the server
-      const response = await fetch("https://192.168.0.124:5000/app0/api/predict", {
-        method: "POST",
-        body: JSON.stringify({ image: imageData }),
-        headers: { "Content-Type": "application/json" },
-      });
+      console.log("Sending image data to server...");
+      const response = await fetch(
+        "https://192.168.0.105:5000/app0/api/predict",
+        {
+          method: "POST",
+          body: JSON.stringify({ image: imageData }),
+          headers: { "Content-Type": "application/json" },
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Network response was not ok.");
       }
 
-      // Processed image received from the API
       const data = await response.json();
-      console.log("Data received from API:", data);
+      console.log("Data received:", data);
 
       const processedImage = new Image();
       processedImage.onload = () => {
-        const ctx = processedDisplayRef.current?.getContext("2d");
-        if (ctx) {
-          ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
-          ctx.drawImage(processedImage, 0, 0);
-        }
-
-        // Continue processing if still active
-        if (isProcessing) {
-          requestAnimationFrame(processFrames); // Continue frame processing
-        }
+        const ctx = processedDisplayRef.current.getContext("2d");
+        ctx.clearRect(
+          0,
+          0,
+          processedDisplayRef.current.width,
+          processedDisplayRef.current.height
+        );
+        ctx.drawImage(processedImage, 0, 0);
       };
       processedImage.src = `data:image/png;base64,${data.image}`;
     } catch (error) {
@@ -129,61 +99,40 @@ function App() {
     }
   };
 
-  // useEffect to handle frame processing continuously when isProcessing is true
-  useEffect(() => {
-    if (isProcessing) {
-      console.log("isProcessing is true, starting to process frames...");
-      processFrames(); // Start processing when isProcessing becomes true
-    }
-
-    // Cleanup when processing stops
-    return () => {
-      setIsProcessing(false);
-      if (currentStream) {
-        currentStream.getTracks().forEach((track) => track.stop());
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-
-      // Clear canvas
-      const ctx = processedDisplayRef.current?.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, processedDisplayRef.current.width, processedDisplayRef.current.height);
-      }
-    };
-  }, [isProcessing]); // Re-run the effect when isProcessing changes
-
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="max-w-lg w-full bg-white p-8 rounded-lg shadow-lg">
-        <h1 className="text-2xl font-semibold text-center mb-4">Attendance Monitoring</h1>
-
-        {/* Canvas to display the processed image */}
-        <div className="flex justify-center mb-4">
-          <canvas
-            ref={processedDisplayRef}
-            className="border border-gray-300 shadow-sm"
-          />
+    <div className="flex justify-center items-center h-screen bg-gray-100">
+      <div className="relative w-full max-w-md p-6 bg-white rounded-xl shadow-lg">
+        {/* Video Element */}
+        <video
+          ref={videoRef}
+          autoPlay
+          className="absolute top-0 left-0 w-full h-full opacity-0 z-[-50]"
+        />
+        
+        {/* Start and Close Buttons */}
+        <div className="flex justify-between items-center space-x-4">
+          <button
+            onClick={handleCapture}
+            className="py-3 px-6 text-white bg-blue-500 rounded-lg shadow-md hover:bg-blue-600 transition duration-200 ease-in-out"
+            style={{ display: isProcessing ? "none" : "inline-block" }}
+          >
+            Start Capture
+          </button>
+          <button
+            onClick={handleClose}
+            className="py-3 px-6 text-white bg-red-500 rounded-lg shadow-md hover:bg-red-600 transition duration-200 ease-in-out"
+            style={{ display: isProcessing ? "inline-block" : "none" }}
+          >
+            Close Capture
+          </button>
         </div>
 
-        {/* Buttons to start and end attendance */}
-        <div className="flex justify-between">
-          <button
-            onClick={handleStartAttendance}
-            className={`px-6 py-3 bg-blue-500 text-white rounded-md transition-all duration-300 ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={isProcessing}
-          >
-            Start Attendance
-          </button>
-
-          <button
-            onClick={handleEndAttendance}
-            className={`px-6 py-3 bg-red-500 text-white rounded-md transition-all duration-300 ${!isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={!isProcessing}
-          >
-            End Attendance
-          </button>
+        {/* Processed Image Display */}
+        <div className="mt-6">
+          <canvas
+            ref={processedDisplayRef}
+            className="w-full rounded-lg border-2 border-gray-300 shadow-lg"
+          />
         </div>
       </div>
     </div>
@@ -192,37 +141,37 @@ function App() {
 
 export default App;
 
-Debugging Steps:
+Changes Made:
 
-1. Log isProcessing state:
+1. Video Element:
 
-The isProcessing state determines whether the frames are being processed. When you click "Start Attendance", log that the state is being set to true. If it’s not set properly, it could be that the button click handler is not working as expected.
-
-
-setIsProcessing(true);
-console.log("Started Attendance and set isProcessing to true.");
-
-
-2. Log API call:
-
-Inside the processFrames function, ensure you see the "Processing frames..." and "Sending image data to the API..." logs before the fetch request is made.
+Set the z-index of the video element to -50 with className="absolute top-0 left-0 w-full h-full opacity-0 z-[-50]". This ensures the video stays behind other content (canvas and buttons).
 
 
 
-3. Check Network Tab:
+2. Buttons:
 
-Open the browser’s developer tools and check the Network tab. Ensure that the request to the API (/app0/api/predict) is being sent. If it's not appearing, there might be an issue with the fetch call or its conditions.
+Start Capture and Close Capture buttons have visually appealing styles.
+
+Tailwind CSS classes used: py-3 px-6, text-white, bg-blue-500, bg-red-500, hover:bg-blue-600, hover:bg-red-600, rounded-lg, shadow-md, and transition for smooth hover effects.
 
 
 
-4. Check if processFrames is called:
+3. Canvas Styling:
 
-If you see that the API is still not being called, verify that processFrames is indeed being called. The easiest way to do this is to add more logs before calling processFrames and inside the function itself.
+The canvas element now has w-full, rounded-lg, border-2, and shadow-lg to ensure it has rounded corners, a border, and a clean shadow effect for a more polished look.
 
 
 
 
-Conclusion:
+Visual Design Enhancements:
 
-By following these debugging steps and ensuring that the isProcessing state is properly updated and that processFrames is being called, you should be able to identify why the API is not being called. Logs will help you track the flow of the app and narrow down where the issue lies.
+Flexbox Centering: The entire UI is centered using flex justify-center items-center h-screen, ensuring the content appears in the center of the viewport.
+
+Container Box Styling: The container holding the video, buttons, and canvas is styled with relative, w-full max-w-md, p-6, bg-white, rounded-xl, and shadow-lg to make it stand out with a clean, modern appearance.
+
+Spacing: Appropriate margins and padding are applied to create ample spacing between elements.
+
+
+This layout will look polished with a smooth user experience without any logic changes. The buttons will be visually distinct, and the canvas will display the processed image clearly.
 
